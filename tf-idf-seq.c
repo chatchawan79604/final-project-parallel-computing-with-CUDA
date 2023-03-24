@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define MAX_LEN 7
 
@@ -84,7 +85,7 @@ int main()
   }
   printf("\n");
 
-  float **tf_arr = (float **)malloc(sizeof(float *) * corpus_size);
+  double **tf_arr = (double **)malloc(sizeof(double *) * corpus_size);
   for (int i = 0; i < corpus_size; i++)
   {
     int wc_sum = 0;
@@ -92,31 +93,44 @@ int main()
     {
       wc_sum += counts[i][wj];
     }
-    
-    tf_arr[i] = (float *)malloc(sizeof(float) * vocab_size);
+
+    tf_arr[i] = (double *)malloc(sizeof(double) * vocab_size);
     for (size_t j = 0; j < vocab_size; j++)
     {
-      int wc = counts[i][j];
-      tf_arr[i][j] = (float)counts[i][j]/wc_sum;
+      tf_arr[i][j] = (double)counts[i][j] / wc_sum;
     }
   }
 
-    printf("tf:\n");
+  printf("tf:\n");
   for (int i = 0; i < corpus_size; i++)
   {
     for (size_t j = 0; j < vocab_size; j++)
     {
-      printf("%f, ", tf_arr[i][j]);
+      printf("%.2f, ", tf_arr[i][j]);
     }
     printf("\n");
   }
   printf("\n");
 
-  int *idf_arr = (int *)malloc(sizeof(int) * vocab_size);
-  for (size_t i = 0; i < vocab_size; i++)
+  double *idf_arr = (double *)malloc(sizeof(double) * vocab_size);
+  for (size_t wi = 0; wi < vocab_size; wi++)
   {
-    tf_arr[i] = 0;
+    int w_dc = 0;
+    for (size_t di = 0; di < corpus_size; di++)
+    {
+      if (counts[di][wi])
+        w_dc++;
+    }
+
+    idf_arr[wi] = log10((double)corpus_size / w_dc);
   }
+
+  printf("idf:\n");
+  for (size_t wi = 0; wi < vocab_size; wi++)
+  {
+    printf("%.3f, ", idf_arr[wi]);
+  }
+  printf("\n");
 
   putc('\n', stdout);
   return 0;
