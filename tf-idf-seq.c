@@ -18,9 +18,13 @@ int find_vocab_size(int corpus[][MAX_LEN], size_t corpus_size, size_t max_len)
     for (size_t j = 0; j < max_len; j++)
     {
       if (corpus[i][j] > max)
+      {
         max = corpus[i][j];
+      }
       if (corpus[i][j + 1] == -1)
+      {
         break;
+      }
     }
   }
   return max + 1;
@@ -43,6 +47,7 @@ void frequency_count(int corpus[][MAX_LEN], size_t corpus_size, size_t max_len, 
 
 int main()
 {
+  int smooth_idf = 0; // should add 1 or not
   int corpus_size = 2;
   int corpus[][MAX_LEN] = {
       {3, 0, 1, 1, 5, -1, -1},
@@ -115,20 +120,41 @@ int main()
   double *idf_arr = (double *)malloc(sizeof(double) * vocab_size);
   for (size_t wi = 0; wi < vocab_size; wi++)
   {
-    int w_dc = 0;
+    int w_dc = 0 + smooth_idf;
     for (size_t di = 0; di < corpus_size; di++)
     {
       if (counts[di][wi])
         w_dc++;
     }
 
-    idf_arr[wi] = log10((double)corpus_size / w_dc);
+    idf_arr[wi] = log((double)corpus_size / w_dc) + 1;
   }
 
   printf("idf:\n");
   for (size_t wi = 0; wi < vocab_size; wi++)
   {
     printf("%.3f, ", idf_arr[wi]);
+  }
+  printf("\n");
+
+  double **tf_idf_arr = tf_arr;
+  for (int di = 0; di < corpus_size; di++)
+  {
+    for (size_t wi = 0; wi < vocab_size; wi++)
+    {
+      tf_idf_arr[di][wi] *= idf_arr[wi];
+    }
+    printf("\n");
+  }
+
+  printf("tf-idf:\n");
+  for (int i = 0; i < corpus_size; i++)
+  {
+    for (size_t j = 0; j < vocab_size; j++)
+    {
+      printf("%.2f, ", tf_idf_arr[i][j]);
+    }
+    printf("\n");
   }
   printf("\n");
 
