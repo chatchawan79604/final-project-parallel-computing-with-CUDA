@@ -121,7 +121,7 @@ int main()
   int smooth_idf = 0; // should add 1 or not
   int vocab_size = 0, seq_max_len = 0, corpus_size = 0;
   int *corpus;
-  read_corpus("corpus_1.txt", &corpus, &corpus_size, &seq_max_len);
+  read_corpus("corpus_large.txt", &corpus, &corpus_size, &seq_max_len);
   printf("seq_max_len: %d, corpus size: %d\n", seq_max_len, corpus_size);
 
   printf("input corpus\n");
