@@ -124,15 +124,15 @@ int main()
   read_corpus("corpus_large.txt", &corpus, &corpus_size, &seq_max_len);
   printf("seq_max_len: %d, corpus size: %d\n", seq_max_len, corpus_size);
 
-  printf("input corpus\n");
-  for (size_t i = 0; i < corpus_size; i++)
-  {
-    for (size_t j = 0; j < seq_max_len; j++)
-    {
-      printf("% 3d ", corpus[i * seq_max_len + j]);
-    }
-    printf("\n");
-  }
+  // printf("input corpus\n");
+  // for (size_t i = 0; i < corpus_size; i++)
+  // {
+  //   for (size_t j = 0; j < seq_max_len; j++)
+  //   {
+  //     printf("% 3d ", corpus[i * seq_max_len + j]);
+  //   }
+  //   printf("\n");
+  // }
 
   vocab_size = find_vocab_size(corpus, corpus_size, seq_max_len);
   printf("vocab size: %d\n", vocab_size);
@@ -149,16 +149,16 @@ int main()
 
   frequency_count(corpus, corpus_size, seq_max_len, counts);
 
-  printf("word counts in each doc:\n");
-  for (int i = 0; i < corpus_size; i++)
-  {
-    for (size_t j = 0; j < vocab_size; j++)
-    {
-      printf("%d, ", counts[i][j]);
-    }
-    printf("\n");
-  }
-  printf("\n");
+  // printf("word counts in each doc:\n");
+  // for (int i = 0; i < corpus_size; i++)
+  // {
+  //   for (size_t j = 0; j < vocab_size; j++)
+  //   {
+  //     printf("%d, ", counts[i][j]);
+  //   }
+  //   printf("\n");
+  // }
+  // printf("\n");
 
   double **tf_arr = (double **)malloc(sizeof(double *) * corpus_size);
   for (int i = 0; i < corpus_size; i++)
@@ -176,16 +176,16 @@ int main()
     }
   }
 
-  printf("tf:\n");
-  for (int i = 0; i < corpus_size; i++)
-  {
-    for (size_t j = 0; j < vocab_size; j++)
-    {
-      printf("%.2f, ", tf_arr[i][j]);
-    }
-    printf("\n");
-  }
-  printf("\n");
+  // printf("tf:\n");
+  // for (int i = 0; i < corpus_size; i++)
+  // {
+  //   for (size_t j = 0; j < vocab_size; j++)
+  //   {
+  //     printf("%.2f, ", tf_arr[i][j]);
+  //   }
+  //   printf("\n");
+  // }
+  // printf("\n");
 
   double *idf_arr = (double *)malloc(sizeof(double) * vocab_size);
   for (size_t wi = 0; wi < vocab_size; wi++)
@@ -200,12 +200,12 @@ int main()
     idf_arr[wi] = log((double)corpus_size / w_dc) + 1;
   }
 
-  printf("idf:\n");
-  for (size_t wi = 0; wi < vocab_size; wi++)
-  {
-    printf("%.3f, ", idf_arr[wi]);
-  }
-  printf("\n\n");
+  // printf("idf:\n");
+  // for (size_t wi = 0; wi < vocab_size; wi++)
+  // {
+  //   printf("%.3f, ", idf_arr[wi]);
+  // }
+  // printf("\n\n");
 
   double **tf_idf_arr = tf_arr;
   for (int di = 0; di < corpus_size; di++)
@@ -216,17 +216,15 @@ int main()
     }
   }
 
-  printf("tf-idf:\n");
-  for (int i = 0; i < corpus_size; i++)
-  {
-    for (size_t j = 0; j < vocab_size; j++)
-    {
-      printf("%.2f, ", tf_idf_arr[i][j]);
-    }
-    printf("\n");
-  }
-  printf("\n");
-
-  putc('\n', stdout);
+  // printf("tf-idf:\n");
+  // for (int i = 0; i < corpus_size; i++)
+  // {
+  //   for (size_t j = 0; j < vocab_size; j++)
+  //   {
+  //     printf("%.2f, ", tf_idf_arr[i][j]);
+  //   }
+  //   printf("\n");
+  // }
+  // printf("\n");
   return 0;
 }
