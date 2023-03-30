@@ -90,7 +90,7 @@ void tfidf(double** tf_arr, double *idf_arr, double **out_arr, int corpus_size, 
 void read_corpus(char *filename, int **array, int *num_rows, int *num_cols)
 {
   FILE *fp;
-  size_t line_size = MAX_LINE_LENGTH;
+  const size_t line_size = MAX_LINE_LENGTH;
   char line[line_size];
   int num_columns = 0, num_lines = 0;
   *num_cols = 0;

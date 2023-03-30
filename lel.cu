@@ -5,6 +5,22 @@
 #include <cuda.h>
 #define MAX_LINE_LENGTH 1024
 
+__global__ void frequency_count_kernel(int *corpus, int corpus_size, int max_len, int count_arr)
+{
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (i < corpus_size && j < max_len)
+  {
+    if (corpus[i * max_len + j] != -1)
+    {
+      corpus[i * max_len + j] = 1;
+      printf("corpus[%d][%d] = %d\n", i, j, corpus[i * max_len + j]);
+      
+    }
+  }
+}
+
 int find_vocab_size(int *corpus, size_t corpus_size, size_t max_len)
 {
   if (corpus == NULL)
@@ -154,6 +170,7 @@ int main()
   int vocab_size = 0, seq_max_len = 0, corpus_size = 0;
   int *corpus;
   int *d_corpus;
+  int gride_size = 2, block_size = 5;
 
   // read input corpus from text file
   read_corpus("corpus.txt", &corpus, &corpus_size, &seq_max_len);
@@ -191,6 +208,10 @@ int main()
   term_frequency(counts, corpus_size, vocab_size, tf_arr);
   invert_document_frequency(counts, corpus_size, vocab_size, smooth_idf, idf_arr);
   tfidf(tf_arr, idf_arr, tf_arr, corpus_size, vocab_size);
+
+  frequency_count_kernel<<<gride_size, block_size>>>(d_corpus, corpus_size, seq_max_len, vocab_size);
+
+  cudaFree(d_corpus);
 
   free(idf_arr);
   for (int i = 0; i < corpus_size; i++)
