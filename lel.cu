@@ -10,13 +10,16 @@ __global__ void find_vocab_size_kernel(int *corpus, int *out_arr, size_t corpus_
   extern __shared__ int sdata[256];
   if (idx < corpus_size * max_len)
   {
+    // load data into shared memory
     sdata[threadIdx.x] = corpus[idx];
     __syncthreads();
 
+    // sequential addressing reduction
     for (int stride = blockDim.x / 2; stride > 0; stride /= 2)
     {
       if (threadIdx.x < stride)
       {
+        // compare and replace
         int lv = sdata[threadIdx.x];
         int rv = sdata[threadIdx.x + stride];
         if (lv < rv)
@@ -32,6 +35,7 @@ __global__ void find_vocab_size_kernel(int *corpus, int *out_arr, size_t corpus_
     }
   }
 
+  // write result for this block to global memory
   if (threadIdx.x == 0)
   {
     out_arr[blockIdx.x] = sdata[0];
@@ -46,7 +50,7 @@ int find_vocab_size(int *corpus, size_t corpus_size, size_t max_len)
     return -1;
   }
 
-  int blocksPerGrid = (corpus_size * max_len + 255) / 256;
+  int blocksPerGrid = (corpus_size * max_len + 511) / 512;
   int *d_corpus, *d_max;
   cudaMalloc((void **)&d_corpus, sizeof(int) * corpus_size * max_len);
   cudaMemcpy(d_corpus, corpus, sizeof(int) * corpus_size * max_len, cudaMemcpyHostToDevice);
@@ -62,8 +66,10 @@ int find_vocab_size(int *corpus, size_t corpus_size, size_t max_len)
   cudaFree(d_max);
 
   int max = h_max[0];
-  for (size_t i = 0; i < blocksPerGrid; i++) {
-    if (max < h_max[i]) {
+  for (size_t i = 0; i < blocksPerGrid; i++)
+  {
+    if (max < h_max[i])
+    {
       max = h_max[i];
     }
   }
