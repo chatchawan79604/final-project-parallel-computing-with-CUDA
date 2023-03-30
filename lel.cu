@@ -8,14 +8,14 @@
 __global__ void frequency_count_kernel(int *corpus, int corpus_size, int max_len, int count_arr)
 {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
-  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  
 
-  if (i < corpus_size && j < max_len)
+  if (i < max_len)
   {
-    if (corpus[i * max_len + j] != -1)
+    if (corpus[i * max_len] != -1)
     {
-      corpus[i * max_len + j] = 1;
-      printf("corpus[%d][%d] = %d\n", i, j, corpus[i * max_len + j]);
+      corpus[i * max_len] = 1;
+      printf("corpus[%d] = %d\n", i, corpus[i * max_len]);
       
     }
   }
@@ -170,10 +170,10 @@ int main()
   int vocab_size = 0, seq_max_len = 0, corpus_size = 0;
   int *corpus;
   int *d_corpus;
-  int gride_size = 2, block_size = 5;
+  int block_size = 256;
 
   // read input corpus from text file
-  read_corpus("corpus.txt", &corpus, &corpus_size, &seq_max_len);
+  read_corpus("corpus_large.txt", &corpus, &corpus_size, &seq_max_len);
   printf("seq_max_len: %d, corpus size: %d\n", seq_max_len, corpus_size);
   cudaMalloc(&d_corpus, sizeof(int) * corpus_size * seq_max_len);
   cudaMemcpy(d_corpus, corpus, sizeof(int) * corpus_size * seq_max_len, cudaMemcpyHostToDevice);
@@ -209,7 +209,7 @@ int main()
   invert_document_frequency(counts, corpus_size, vocab_size, smooth_idf, idf_arr);
   tfidf(tf_arr, idf_arr, tf_arr, corpus_size, vocab_size);
 
-  frequency_count_kernel<<<gride_size, block_size>>>(d_corpus, corpus_size, seq_max_len, vocab_size);
+  frequency_count_kernel<<<2, block_size>>>(d_corpus, corpus_size, seq_max_len, vocab_size);
 
   cudaFree(d_corpus);
 
