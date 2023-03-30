@@ -2,22 +2,39 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include <cuda.h>
 #define MAX_LINE_LENGTH 1024
 
-__global__ void frequency_count_kernel(int *corpus, int corpus_size, int max_len, int count_arr)
+__global__ void find_vocab_size_kernel(int *corpus, int *out_arr, size_t corpus_size, size_t max_len)
 {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  
-
-  if (i < max_len)
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  extern __shared__ int sdata[256];
+  if (idx < corpus_size * max_len)
   {
-    if (corpus[i * max_len] != -1)
+    sdata[threadIdx.x] = corpus[idx];
+    __syncthreads();
+
+    for (int stride = blockDim.x / 2; stride > 0; stride /= 2)
     {
-      corpus[i * max_len] = 1;
-      printf("corpus[%d] = %d\n", i, corpus[i * max_len]);
-      
+      if (threadIdx.x < stride)
+      {
+        int lv = sdata[threadIdx.x];
+        int rv = sdata[threadIdx.x + stride];
+        if (lv < rv)
+        {
+          sdata[threadIdx.x] = rv;
+        }
+        else
+        {
+          sdata[threadIdx.x] = lv;
+        }
+      }
+      __syncthreads();
     }
+  }
+
+  if (threadIdx.x == 0)
+  {
+    out_arr[blockIdx.x] = sdata[0];
   }
 }
 
@@ -29,21 +46,28 @@ int find_vocab_size(int *corpus, size_t corpus_size, size_t max_len)
     return -1;
   }
 
-  int max = corpus[0];
-  for (size_t i = 0; i < corpus_size; i++)
-  {
-    for (size_t j = 0; j < max_len; j++)
-    {
-      if (corpus[i * max_len + j] > max)
-      {
-        max = corpus[i * max_len + j];
-      }
-      if (corpus[i * max_len + j + 1] == -1)
-      {
-        break;
-      }
+  int blocksPerGrid = (corpus_size * max_len + 255) / 256;
+  int *d_corpus, *d_max;
+  cudaMalloc((void **)&d_corpus, sizeof(int) * corpus_size * max_len);
+  cudaMemcpy(d_corpus, corpus, sizeof(int) * corpus_size * max_len, cudaMemcpyHostToDevice);
+
+  int *h_max;
+  h_max = (int *)malloc(sizeof(int) * blocksPerGrid);
+  cudaMalloc((void **)&d_max, sizeof(int) * blocksPerGrid);
+  cudaMemcpy(d_max, h_max, sizeof(int) * blocksPerGrid, cudaMemcpyHostToDevice);
+
+  find_vocab_size_kernel<<<blocksPerGrid, 256>>>(d_corpus, d_max, corpus_size, max_len);
+  cudaMemcpy(h_max, d_max, sizeof(int) * blocksPerGrid, cudaMemcpyDeviceToHost);
+  cudaFree(d_corpus);
+  cudaFree(d_max);
+
+  int max = h_max[0];
+  for (size_t i = 0; i < blocksPerGrid; i++) {
+    if (max < h_max[i]) {
+      max = h_max[i];
     }
   }
+
   return max + 1;
 }
 
@@ -93,7 +117,7 @@ void invert_document_frequency(int **term_counts, int corpus_size, int vocab_siz
   }
 }
 
-void tfidf(double** tf_arr, double *idf_arr, double **out_arr, int corpus_size, int vocab_size)
+void tfidf(double **tf_arr, double *idf_arr, double **out_arr, int corpus_size, int vocab_size)
 {
   for (int di = 0; di < corpus_size; di++)
   {
@@ -169,19 +193,15 @@ int main()
   int smooth_idf = 0; // should add 1 or not
   int vocab_size = 0, seq_max_len = 0, corpus_size = 0;
   int *corpus;
-  int *d_corpus;
-  int block_size = 256;
 
   // read input corpus from text file
-  read_corpus("corpus_large.txt", &corpus, &corpus_size, &seq_max_len);
+  read_corpus("corpus.txt", &corpus, &corpus_size, &seq_max_len);
   printf("seq_max_len: %d, corpus size: %d\n", seq_max_len, corpus_size);
-  cudaMalloc(&d_corpus, sizeof(int) * corpus_size * seq_max_len);
-  cudaMemcpy(d_corpus, corpus, sizeof(int) * corpus_size * seq_max_len, cudaMemcpyHostToDevice);
 
   // find maximum word id
   vocab_size = find_vocab_size(corpus, corpus_size, seq_max_len);
   printf("vocab size: %d\n", vocab_size);
-  
+
   // initailize word counts array
   int **counts = (int **)malloc(sizeof(int *) * corpus_size);
   for (int i = 0; i < corpus_size; i++)
@@ -208,10 +228,6 @@ int main()
   term_frequency(counts, corpus_size, vocab_size, tf_arr);
   invert_document_frequency(counts, corpus_size, vocab_size, smooth_idf, idf_arr);
   tfidf(tf_arr, idf_arr, tf_arr, corpus_size, vocab_size);
-
-  frequency_count_kernel<<<2, block_size>>>(d_corpus, corpus_size, seq_max_len, vocab_size);
-
-  cudaFree(d_corpus);
 
   free(idf_arr);
   for (int i = 0; i < corpus_size; i++)
