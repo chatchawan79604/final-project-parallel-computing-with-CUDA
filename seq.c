@@ -154,7 +154,7 @@ int main()
   int *corpus;
 
   // read input corpus from text file
-  read_corpus("corpus_large.txt", &corpus, &corpus_size, &seq_max_len);
+  read_corpus("corpus_1.txt", &corpus, &corpus_size, &seq_max_len);
   printf("seq_max_len: %d, corpus size: %d\n", seq_max_len, corpus_size);
 
   // find maximum word id
@@ -187,6 +187,15 @@ int main()
   term_frequency(counts, corpus_size, vocab_size, tf_arr);
   invert_document_frequency(counts, corpus_size, vocab_size, smooth_idf, idf_arr);
   tfidf(tf_arr, idf_arr, tf_arr, corpus_size, vocab_size);
+
+  for (size_t i = 0; i < corpus_size; i++)
+  {
+    for (size_t j = 0; j < vocab_size; j++)
+    {
+      printf("%.3f ", tf_arr[i][j]);
+    }
+    printf("\n");
+  }
 
   free(idf_arr);
   for (int i = 0; i < corpus_size; i++)

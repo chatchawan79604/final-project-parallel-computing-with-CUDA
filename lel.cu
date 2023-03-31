@@ -7,7 +7,7 @@
 __global__ void find_vocab_size_kernel(int *corpus, int *out_arr, size_t corpus_size, size_t max_len)
 {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  extern __shared__ int sdata[256];
+  __shared__ int sdata[256];
   if (idx < corpus_size * max_len)
   {
     // load data into shared memory
@@ -77,7 +77,7 @@ int find_vocab_size(int *corpus, size_t corpus_size, size_t max_len)
   return max + 1;
 }
 
-void frequency_count(int *corpus, int corpus_size, int max_len, int **count_arr)
+void frequency_count(int *corpus, int corpus_size, int max_len, int vocab_size, int *count_arr)
 {
   for (size_t i = 0; i < corpus_size; i++)
   {
@@ -85,37 +85,51 @@ void frequency_count(int *corpus, int corpus_size, int max_len, int **count_arr)
     {
       if (corpus[i * max_len + j] != -1)
       {
-        count_arr[i][corpus[i * max_len + j]]++;
+        count_arr[i * vocab_size + corpus[i * max_len + j]]++;
       }
     }
   }
 }
 
-void term_frequency(int **term_counts, int corpus_size, int vocab_size, double **out_arr)
+// counts each document
+// one block for on document
+void term_frequency_kernel(int *term_counts, double *out_freq, int corpus_size, int vocab_size)
 {
+}
+
+void term_frequency(int *term_counts, int corpus_size, int vocab_size, double **out_arr)
+{
+  int *d_term_counts;
+  cudaMalloc(&d_term_counts, sizeof(int) * corpus_size * vocab_size);
+  cudaMemcpy(d_term_counts, term_counts, sizeof(int) * corpus_size * vocab_size, cudaMemcpyHostToDevice);
+
+  double *d_doc_term_freq;
+  cudaMalloc(&d_doc_term_freq, sizeof(double) * corpus_size);
+  term_frequency_kernel(d_term_counts, d_doc_term_freq, corpus_size, vocab_size);
+  cudaFree(d_term_counts);
   for (int i = 0; i < corpus_size; i++)
   {
     int wc_sum = 0;
     for (size_t wj = 0; wj < vocab_size; wj++)
     {
-      wc_sum += term_counts[i][wj];
+      wc_sum += term_counts[i * vocab_size + wj];
     }
 
     for (size_t j = 0; j < vocab_size; j++)
     {
-      out_arr[i][j] = (double)term_counts[i][j] / wc_sum;
+      out_arr[i][j] = (double)term_counts[i * vocab_size + j] / wc_sum;
     }
   }
 }
 
-void invert_document_frequency(int **term_counts, int corpus_size, int vocab_size, int smooth_idf, double *out_arr)
+void invert_document_frequency(int *term_counts, int corpus_size, int vocab_size, int smooth_idf, double *out_arr)
 {
   for (size_t wi = 0; wi < vocab_size; wi++)
   {
     int w_dc = 0 + smooth_idf;
     for (size_t di = 0; di < corpus_size; di++)
     {
-      if (term_counts[di][wi])
+      if (term_counts[di * vocab_size + wi])
         w_dc++;
     }
 
@@ -201,7 +215,8 @@ int main()
   int *corpus;
 
   // read input corpus from text file
-  read_corpus("corpus.txt", &corpus, &corpus_size, &seq_max_len);
+  char corpus_file_name[] = "corpus.txt";
+  read_corpus(corpus_file_name, &corpus, &corpus_size, &seq_max_len);
   printf("seq_max_len: %d, corpus size: %d\n", seq_max_len, corpus_size);
 
   // find maximum word id
@@ -209,14 +224,13 @@ int main()
   printf("vocab size: %d\n", vocab_size);
 
   // initailize word counts array
-  int **counts = (int **)malloc(sizeof(int *) * corpus_size);
+  int *counts = (int *)malloc(sizeof(int) * corpus_size * vocab_size);
   for (int i = 0; i < corpus_size; i++)
   {
-    counts[i] = (int *)malloc(sizeof(int) * vocab_size);
     for (size_t j = 0; j < vocab_size; j++)
     {
       // set to identity
-      counts[i][j] = 0;
+      counts[i * vocab_size + j] = 0;
     }
   }
 
@@ -230,16 +244,24 @@ int main()
   // initailize idf array
   double *idf_arr = (double *)malloc(sizeof(double) * vocab_size);
 
-  frequency_count(corpus, corpus_size, seq_max_len, counts);
+  frequency_count(corpus, corpus_size, seq_max_len, vocab_size, counts);
   term_frequency(counts, corpus_size, vocab_size, tf_arr);
   invert_document_frequency(counts, corpus_size, vocab_size, smooth_idf, idf_arr);
   tfidf(tf_arr, idf_arr, tf_arr, corpus_size, vocab_size);
+
+  for (size_t i = 0; i < corpus_size; i++)
+  {
+    for (size_t j = 0; j < vocab_size; j++)
+    {
+      printf("%.3f ", tf_arr[i][j]);
+    }
+    printf("\n");
+  }
 
   free(idf_arr);
   for (int i = 0; i < corpus_size; i++)
   {
     free(tf_arr[i]);
-    free(counts[i]);
   }
   free(tf_arr);
   free(counts);
