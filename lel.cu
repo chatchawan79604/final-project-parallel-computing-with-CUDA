@@ -91,6 +91,7 @@ void frequency_count(int *corpus, int corpus_size, int max_len, int vocab_size, 
   }
 }
 
+// TODO: optimize this part
 __global__ void term_frequency_kernel(int *term_counts, int corpus_size, int vocab_size, double *out_arr)
 {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -103,8 +104,6 @@ __global__ void term_frequency_kernel(int *term_counts, int corpus_size, int voc
       wc_sum += term_counts[i * vocab_size + wj];
     }
 
-    printf(">%02d sum: %d\n", i, wc_sum);
-
     for (size_t j = 0; j < vocab_size; j++)
     {
       out_arr[i * vocab_size + j] = (double)term_counts[i * vocab_size + j] / wc_sum;
@@ -112,25 +111,25 @@ __global__ void term_frequency_kernel(int *term_counts, int corpus_size, int voc
   }
 }
 
-void term_frequency(int *term_counts, int corpus_size, int vocab_size, double *out_arr)
+void term_frequency(int *term_counts, int corpus_size, int vocab_size, double *tf_arr)
 {
   int *d_term_counts;
-  double *d_out_arr;
+  double *d_tf_arr;
 
   cudaMalloc(&d_term_counts, corpus_size * vocab_size * sizeof(int));
   cudaMemcpy(d_term_counts, term_counts, corpus_size * vocab_size * sizeof(int), cudaMemcpyHostToDevice);
 
-  cudaMalloc(&d_out_arr, corpus_size * vocab_size * sizeof(double));
+  cudaMalloc(&d_tf_arr, corpus_size * vocab_size * sizeof(double));
 
   int block_size = 256;
   int num_blocks = (corpus_size + block_size - 1) / block_size;
 
-  term_frequency_kernel<<<num_blocks, block_size>>>(d_term_counts, corpus_size, vocab_size, d_out_arr);
+  term_frequency_kernel<<<num_blocks, block_size>>>(d_term_counts, corpus_size, vocab_size, d_tf_arr);
 
-  cudaMemcpy(out_arr, d_out_arr, corpus_size * vocab_size * sizeof(double), cudaMemcpyDeviceToHost);
+  cudaMemcpy(tf_arr, d_tf_arr, corpus_size * vocab_size * sizeof(double), cudaMemcpyDeviceToHost);
 
   cudaFree(d_term_counts);
-  cudaFree(d_out_arr);
+  cudaFree(d_tf_arr);
 }
 
 
