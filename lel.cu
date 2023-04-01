@@ -91,58 +91,48 @@ void frequency_count(int *corpus, int corpus_size, int max_len, int vocab_size, 
   }
 }
 
-__global__ void term_frequency_kernel(int *term_counts, double *out_freq, int corpus_size, int vocab_size)
+__global__ void term_frequency_kernel(int *term_counts, int corpus_size, int vocab_size, double *out_arr)
 {
-  __shared__ int word_count_sum;
-  int tid = threadIdx.x;
-  int bid = blockIdx.x;
-  if (tid == 0)
-  {
-    word_count_sum = 0;
-  }
-  __syncthreads();
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-  if (bid < corpus_size && tid < vocab_size)
+  if (i < corpus_size)
   {
-    printf("b:%d, t:%d: wc:%d\n", bid, tid, term_counts[bid * vocab_size + tid]);
-    word_count_sum = word_count_sum + term_counts[bid * vocab_size + tid];
-    __syncthreads();
-    if (tid == 0)
+    int wc_sum = 0;
+    for (size_t wj = 0; wj < vocab_size; wj++)
     {
-      printf("b:%d,wc-sum:%d\n", bid, word_count_sum);
+      wc_sum += term_counts[i * vocab_size + wj];
     }
 
-    out_freq[bid * vocab_size + tid] = (double)term_counts[bid * vocab_size + tid] / word_count_sum;
+    printf(">%02d sum: %d\n", i, wc_sum);
+
+    for (size_t j = 0; j < vocab_size; j++)
+    {
+      out_arr[i * vocab_size + j] = (double)term_counts[i * vocab_size + j] / wc_sum;
+    }
   }
 }
+
 void term_frequency(int *term_counts, int corpus_size, int vocab_size, double *out_arr)
 {
   int *d_term_counts;
-  cudaMalloc(&d_term_counts, sizeof(int) * corpus_size * vocab_size);
-  cudaMemcpy(d_term_counts, term_counts, sizeof(int) * corpus_size * vocab_size, cudaMemcpyHostToDevice);
+  double *d_out_arr;
 
-  double *d_term_freq;
-  cudaMalloc(&d_term_freq, sizeof(int) * corpus_size * vocab_size);
-  term_frequency_kernel<<<corpus_size, vocab_size>>>(d_term_counts, d_term_freq, corpus_size, vocab_size);
+  cudaMalloc(&d_term_counts, corpus_size * vocab_size * sizeof(int));
+  cudaMemcpy(d_term_counts, term_counts, corpus_size * vocab_size * sizeof(int), cudaMemcpyHostToDevice);
 
-  cudaMemcpy(out_arr, d_term_freq, sizeof(int) * corpus_size * vocab_size, cudaMemcpyDeviceToHost);
+  cudaMalloc(&d_out_arr, corpus_size * vocab_size * sizeof(double));
+
+  int block_size = 256;
+  int num_blocks = (corpus_size + block_size - 1) / block_size;
+
+  term_frequency_kernel<<<num_blocks, block_size>>>(d_term_counts, corpus_size, vocab_size, d_out_arr);
+
+  cudaMemcpy(out_arr, d_out_arr, corpus_size * vocab_size * sizeof(double), cudaMemcpyDeviceToHost);
+
   cudaFree(d_term_counts);
-  cudaFree(d_term_freq);
-
-  // for (int i = 0; i < corpus_size; i++)
-  // {
-  //   int wc_sum = 0;
-  //   for (size_t wj = 0; wj < vocab_size; wj++)
-  //   {
-  //     wc_sum += term_counts[i * vocab_size + wj];
-  //   }
-
-  //   for (size_t j = 0; j < vocab_size; j++)
-  //   {
-  //     out_arr[i * vocab_size + j] = (double)term_counts[i * vocab_size + j] / wc_sum;
-  //   }
-  // }
+  cudaFree(d_out_arr);
 }
+
 
 void invert_document_frequency(int *term_counts, int corpus_size, int vocab_size, int smooth_idf, double *out_arr)
 {
