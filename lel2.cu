@@ -187,15 +187,40 @@ void invert_document_frequency(int **term_counts, int corpus_size, int vocab_siz
   }
 }
 
+__global__ void tfidf_kernel(double *tf_arr, double *idf_arr, double *out_arr, int corpus_size, int vocab_size)
+{
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx < corpus_size * vocab_size)
+  {
+    out_arr[idx] = tf_arr[idx] * idf_arr[idx / vocab_size];
+    printf("out_arr[%d] = %f", idx, out_arr[idx]);
+  }
+}
+
 void tfidf(double **tf_arr, double *idf_arr, double **out_arr, int corpus_size, int vocab_size)
 {
-  for (int di = 0; di < corpus_size; di++)
-  {
-    for (size_t wi = 0; wi < vocab_size; wi++)
-    {
-      out_arr[di][wi] = tf_arr[di][wi] * idf_arr[wi];
-    }
-  }
+  int blocksPerGrid = (corpus_size * max_len + 511) / 512;
+  int *d_corpus, *d_max;
+  cudaMalloc((void **)&d_corpus, sizeof(int) * corpus_size * max_len);
+  cudaMemcpy(d_corpus, corpus, sizeof(int) * corpus_size * max_len, cudaMemcpyHostToDevice);
+
+  int *h_max;
+  h_max = (int *)malloc(sizeof(int) * blocksPerGrid);
+  cudaMalloc((void **)&d_max, sizeof(int) * blocksPerGrid);
+  cudaMemcpy(d_max, h_max, sizeof(int) * blocksPerGrid, cudaMemcpyHostToDevice);
+
+  tfidf_kernel<<<blocksPerGrid, 256>>>(d_corpus, corpus_size, max_len, out_arr);
+  cudaMemcpy(h_max, d_max, sizeof(int) * blocksPerGrid, cudaMemcpyDeviceToHost);
+  cudaFree(d_corpus);
+  cudaFree(d_max);
+
+  // for (int di = 0; di < corpus_size; di++)
+  // {
+  //   for (size_t wi = 0; wi < vocab_size; wi++)
+  //   {
+  //     out_arr[di][wi] = tf_arr[di][wi] * idf_arr[wi];
+  //   }
+  // }
 }
 
 void read_corpus(char *filename, int **array, int *num_rows, int *num_cols)
