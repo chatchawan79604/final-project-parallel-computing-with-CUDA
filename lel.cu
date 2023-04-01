@@ -133,9 +133,10 @@ void term_frequency(int *term_counts, int corpus_size, int vocab_size, double *t
 }
 
 
-void invert_document_frequency(int *term_counts, int corpus_size, int vocab_size, int smooth_idf, double *out_arr)
+__global__ void invert_document_frequency_kernel(int *term_counts, int corpus_size, int vocab_size, int smooth_idf, double *out_arr)
 {
-  for (size_t wi = 0; wi < vocab_size; wi++)
+  int wi = blockIdx.x * blockDim.x + threadIdx.x;
+  if (wi < vocab_size)
   {
     int w_dc = 0 + smooth_idf;
     for (size_t di = 0; di < corpus_size; di++)
@@ -146,6 +147,27 @@ void invert_document_frequency(int *term_counts, int corpus_size, int vocab_size
 
     out_arr[wi] = log((double)corpus_size / w_dc) + 1;
   }
+}
+
+void invert_document_frequency(int *term_counts, int corpus_size, int vocab_size, int smooth_idf, double *out_arr)
+{
+  int *d_term_counts;
+  double *d_out_arr;
+
+  cudaMalloc(&d_term_counts, corpus_size * vocab_size * sizeof(int));
+  cudaMemcpy(d_term_counts, term_counts, corpus_size * vocab_size * sizeof(int), cudaMemcpyHostToDevice);
+
+  cudaMalloc(&d_out_arr, vocab_size * sizeof(double));
+
+  int block_size = 256;
+  int num_blocks = (vocab_size + block_size - 1) / block_size;
+
+  invert_document_frequency_kernel<<<num_blocks, block_size>>>(d_term_counts, corpus_size, vocab_size, smooth_idf, d_out_arr);
+
+  cudaMemcpy(out_arr, d_out_arr, vocab_size * sizeof(double), cudaMemcpyDeviceToHost);
+
+  cudaFree(d_term_counts);
+  cudaFree(d_out_arr);
 }
 
 void tfidf(double *tf_arr, double *idf_arr, double *out_arr, int corpus_size, int vocab_size)
