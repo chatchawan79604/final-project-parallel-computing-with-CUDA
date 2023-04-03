@@ -116,28 +116,9 @@ __global__ void term_frequency_kernel(int *term_counts, int corpus_size, int voc
     //   printf("doc(%d) => %d\n", doc, scounts[0]);
 
     out_arr[doc * vocab_size + wrd] = (double)term_counts[doc * vocab_size + wrd] / scounts[0];
+
+    // printf("tf(doc=%d,wrd=%d) = %f\n", doc, wrd, out_arr[doc * vocab_size + wrd]);
   }
-}
-
-void term_frequency(int *term_counts, int corpus_size, int vocab_size, double *tf_arr)
-{
-  int *d_term_counts;
-  double *d_tf_arr;
-
-  cudaMalloc(&d_term_counts, corpus_size * vocab_size * sizeof(int));
-  cudaMemcpy(d_term_counts, term_counts, corpus_size * vocab_size * sizeof(int), cudaMemcpyHostToDevice);
-
-  cudaMalloc(&d_tf_arr, corpus_size * vocab_size * sizeof(double));
-
-  int block_size = vocab_size;
-  int num_blocks = corpus_size;
-
-  term_frequency_kernel<<<num_blocks, block_size>>>(d_term_counts, corpus_size, vocab_size, d_tf_arr);
-
-  cudaMemcpy(tf_arr, d_tf_arr, corpus_size * vocab_size * sizeof(double), cudaMemcpyDeviceToHost);
-
-  cudaFree(d_term_counts);
-  cudaFree(d_tf_arr);
 }
 
 __global__ void invert_document_frequency_kernel(int *term_counts, int corpus_size, int vocab_size, int smooth_idf, double *out_arr)
@@ -163,39 +144,61 @@ __global__ void invert_document_frequency_kernel(int *term_counts, int corpus_si
   }
 
   int w_dc = scounts[0] + smooth_idf;
-  out_arr[wrd] = log((double)corpus_size / w_dc) + 1;
+  out_arr[wrd] = log10((double)corpus_size / w_dc);
+
+  // if (doc == 0)
+  // {
+  //   printf("corpus_size = %d\n", corpus_size);
+  //   printf("idf(wrd=%d) = %f\n", wrd, out_arr[wrd]);
+  //   printf("w_doc_count(wrd=%d) = %d\n", wrd, w_dc);
+  // }
 }
 
-void invert_document_frequency(int *term_counts, int corpus_size, int vocab_size, int smooth_idf, double *out_arr)
+__global__ void tfidf_kernel(const double *tf_arr, const double *idf_arr, double *out_arr, int corpus_size, int vocab_size)
 {
+  int idx = blockDim.x * blockIdx.x + threadIdx.x;
+  if (idx < corpus_size * vocab_size)
+  {
+    int wi = idx % vocab_size;
+    // int di = idx / vocab_size;
+    out_arr[idx] = tf_arr[idx] * idf_arr[wi];
+  }
+}
+
+void tfidf(int *term_counts, double *out_arr, int corpus_size, int vocab_size)
+{
+  int smooth_idf = 0;
+  size_t num_elements = corpus_size * vocab_size;
+  double *d_tf_arr, *d_idf_arr, *d_out_arr;
   int *d_term_counts;
-  double *d_out_arr;
-  
-  cudaMalloc(&d_term_counts, corpus_size * vocab_size * sizeof(int));
+
+  cudaMalloc((void **)&d_term_counts, corpus_size * vocab_size * sizeof(int));
   cudaMemcpy(d_term_counts, term_counts, corpus_size * vocab_size * sizeof(int), cudaMemcpyHostToDevice);
 
-  cudaMalloc(&d_out_arr, vocab_size * sizeof(double));
+  /* term frequency */
+  cudaMalloc((void **)&d_tf_arr, num_elements * sizeof(double));
+  int tf_block_size = vocab_size;
+  int tf_num_blocks = corpus_size;
+  term_frequency_kernel<<<tf_num_blocks, tf_block_size>>>(d_term_counts, corpus_size, vocab_size, d_tf_arr);
 
-  int block_size = corpus_size;
-  int num_blocks = vocab_size;
-
-  invert_document_frequency_kernel<<<num_blocks, block_size>>>(d_term_counts, corpus_size, vocab_size, smooth_idf, d_out_arr);
-
-  cudaMemcpy(out_arr, d_out_arr, vocab_size * sizeof(double), cudaMemcpyDeviceToHost);
-
+  /* inverted document frequency */
+  cudaMalloc((void **)&d_idf_arr, vocab_size * sizeof(double));
+  int idf_block_size = corpus_size;
+  int idf_num_blocks = vocab_size;
+  invert_document_frequency_kernel<<<idf_num_blocks, idf_block_size>>>(d_term_counts, corpus_size, vocab_size, smooth_idf, d_idf_arr);
   cudaFree(d_term_counts);
-  cudaFree(d_out_arr);
-}
 
-void tfidf(double *tf_arr, double *idf_arr, double *out_arr, int corpus_size, int vocab_size)
-{
-  for (int di = 0; di < corpus_size; di++)
-  {
-    for (size_t wi = 0; wi < vocab_size; wi++)
-    {
-      out_arr[di * vocab_size + wi] = tf_arr[di * vocab_size + wi] * idf_arr[wi];
-    }
-  }
+  /* tfidf */
+  cudaMalloc((void **)&d_out_arr, num_elements * sizeof(double));
+  int tfidf_block_size = 256;
+  int tfidf_num_blocks = (num_elements + tfidf_block_size - 1) / tfidf_block_size;
+  tfidf_kernel<<<tfidf_num_blocks, tfidf_block_size>>>(d_tf_arr, d_idf_arr, d_out_arr, corpus_size, vocab_size);
+
+  cudaMemcpy(out_arr, d_out_arr, num_elements * sizeof(double), cudaMemcpyDeviceToHost);
+
+  cudaFree(d_tf_arr);
+  cudaFree(d_idf_arr);
+  cudaFree(d_out_arr);
 }
 
 void read_corpus(char *filename, int **array, int *num_rows, int *num_cols)
@@ -241,10 +244,14 @@ void read_corpus(char *filename, int **array, int *num_rows, int *num_cols)
   {
     j = 0;
     int line_len = strlen(line);
-    for (int c = line_len - 1; c > 0; c--){
-      if (line[c] == ' ' || line[c] == '\n') {
+    for (int c = line_len - 1; c > 0; c--)
+    {
+      if (line[c] == ' ' || line[c] == '\n')
+      {
         line[c] = '\0';
-      } else {
+      }
+      else
+      {
         break;
       }
     }
@@ -289,7 +296,7 @@ void write_array_to_file(double *arr, int rows, int cols, const char *filename)
 
 int main()
 {
-  int smooth_idf = 1; // should add 1 or not
+  int smooth_idf = 0; // should add 1 or not
   int vocab_size = 0, seq_max_len = 0, corpus_size = 0;
   int *corpus;
 
@@ -320,11 +327,7 @@ int main()
   double *idf_arr = (double *)malloc(sizeof(double) * vocab_size);
 
   frequency_count(corpus, corpus_size, seq_max_len, vocab_size, counts);
-  term_frequency(counts, corpus_size, vocab_size, tf_arr);
-  write_array_to_file(tf_arr, corpus_size, vocab_size, "_tf.arr");
-  invert_document_frequency(counts, corpus_size, vocab_size, smooth_idf, idf_arr);
-  write_array_to_file(idf_arr, 1, vocab_size, "_idf.arr");
-  tfidf(tf_arr, idf_arr, tf_arr, corpus_size, vocab_size);
+  tfidf(counts, tf_arr, corpus_size, vocab_size);
 
   char tfidf_filename[] = "_tfidf.arr";
   write_array_to_file(tf_arr, corpus_size, vocab_size, tfidf_filename);

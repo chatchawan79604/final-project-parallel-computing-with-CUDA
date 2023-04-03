@@ -166,7 +166,7 @@ int main()
   int *corpus;
 
   // read input corpus from text file
-  read_corpus("corpus_1.txt", &corpus, &corpus_size, &seq_max_len);
+  read_corpus("corpus.txt", &corpus, &corpus_size, &seq_max_len);
   printf("seq_max_len: %d, corpus size: %d\n", seq_max_len, corpus_size);
 
   // find maximum word id
