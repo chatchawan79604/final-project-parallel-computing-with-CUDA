@@ -90,7 +90,7 @@ void tfidf(double** tf_arr, double *idf_arr, double **out_arr, int corpus_size, 
 void read_corpus(char *filename, int **array, int *num_rows, int *num_cols)
 {
   FILE *fp;
-  const size_t line_size = MAX_LINE_LENGTH;
+  size_t line_size = MAX_LINE_LENGTH;
   char line[line_size];
   int num_columns = 0, num_lines = 0;
   *num_cols = 0;
@@ -129,6 +129,18 @@ void read_corpus(char *filename, int **array, int *num_rows, int *num_cols)
   while (fgets(line, line_size, fp) != NULL)
   {
     j = 0;
+    int line_len = strlen(line);
+    for (int c = line_len - 1; c > 0; c--)
+    {
+      if (line[c] == ' ' || line[c] == '\n')
+      {
+        line[c] = '\0';
+      }
+      else
+      {
+        break;
+      }
+    }
     char *token = strtok(line, " ");
     while (token != NULL)
     {
