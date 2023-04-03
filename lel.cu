@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#define MAX_LINE_LENGTH 1024
+#define MAX_LINE_LENGTH 2048
 
 __global__ void find_vocab_size_kernel(int *corpus, int *out_arr, size_t corpus_size, size_t max_len)
 {
@@ -85,11 +85,9 @@ void frequency_count(int *corpus, int corpus_size, int max_len, int vocab_size, 
     {
       if (corpus[i * max_len + j] != -1)
       {
-        printf("%d ", corpus[i * max_len + j]);
         count_arr[i * vocab_size + corpus[i * max_len + j]]++;
       }
     }
-    printf("\n");
   }
 }
 
@@ -114,8 +112,8 @@ __global__ void term_frequency_kernel(int *term_counts, int corpus_size, int voc
       __syncthreads();
     }
 
-    if (wrd == 0)
-      printf("doc(%d) => %d\n", doc, scounts[0]);
+    // if (wrd == 0)
+    //   printf("doc(%d) => %d\n", doc, scounts[0]);
 
     out_arr[doc * vocab_size + wrd] = (double)term_counts[doc * vocab_size + wrd] / scounts[0];
   }
@@ -172,16 +170,7 @@ void invert_document_frequency(int *term_counts, int corpus_size, int vocab_size
 {
   int *d_term_counts;
   double *d_out_arr;
-
-  for (int i = 0; i < corpus_size; i++)
-  {
-    for (int j = 0; j < vocab_size; j++)
-    {
-      printf("%d ", term_counts[i * vocab_size + j]);
-    }
-    printf("\n");
-  }
-
+  
   cudaMalloc(&d_term_counts, corpus_size * vocab_size * sizeof(int));
   cudaMemcpy(d_term_counts, term_counts, corpus_size * vocab_size * sizeof(int), cudaMemcpyHostToDevice);
 
@@ -252,9 +241,12 @@ void read_corpus(char *filename, int **array, int *num_rows, int *num_cols)
   {
     j = 0;
     int line_len = strlen(line);
-    if (line[line_len - 2] == ' ')
-    {
-      line[line_len - 2] = line[line_len - 1]; // remove trailing space
+    for (int c = line_len - 1; c > 0; c--){
+      if (line[c] == ' ' || line[c] == '\n') {
+        line[c] = '\0';
+      } else {
+        break;
+      }
     }
     char *token = strtok(line, " ");
     while (token != NULL)
@@ -297,7 +289,7 @@ void write_array_to_file(double *arr, int rows, int cols, const char *filename)
 
 int main()
 {
-  int smooth_idf = 0; // should add 1 or not
+  int smooth_idf = 1; // should add 1 or not
   int vocab_size = 0, seq_max_len = 0, corpus_size = 0;
   int *corpus;
 
@@ -329,11 +321,12 @@ int main()
 
   frequency_count(corpus, corpus_size, seq_max_len, vocab_size, counts);
   term_frequency(counts, corpus_size, vocab_size, tf_arr);
-  write_array_to_file(tf_arr, corpus_size, vocab_size, "tf.arr");
+  write_array_to_file(tf_arr, corpus_size, vocab_size, "_tf.arr");
   invert_document_frequency(counts, corpus_size, vocab_size, smooth_idf, idf_arr);
+  write_array_to_file(idf_arr, 1, vocab_size, "_idf.arr");
   tfidf(tf_arr, idf_arr, tf_arr, corpus_size, vocab_size);
 
-  char tfidf_filename[] = "outfile.txt";
+  char tfidf_filename[] = "_tfidf.arr";
   write_array_to_file(tf_arr, corpus_size, vocab_size, tfidf_filename);
 
   free(idf_arr);
