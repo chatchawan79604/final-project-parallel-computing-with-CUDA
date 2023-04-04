@@ -322,17 +322,13 @@ int main()
 
   // initailize tf array
   double *tf_arr = (double *)malloc(sizeof(double *) * corpus_size * vocab_size);
-
-  // initailize idf array
-  double *idf_arr = (double *)malloc(sizeof(double) * vocab_size);
-
+  
   frequency_count(corpus, corpus_size, seq_max_len, vocab_size, counts);
   tfidf(counts, tf_arr, corpus_size, vocab_size);
 
   char tfidf_filename[] = "_tfidf.arr";
   write_array_to_file(tf_arr, corpus_size, vocab_size, tfidf_filename);
 
-  free(idf_arr);
   free(tf_arr);
   free(counts);
   free(corpus);
