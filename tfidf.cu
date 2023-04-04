@@ -84,15 +84,17 @@ __global__ void frequency_count_kernel(int *corpus, int *count_arr, int seq_max_
   {
     // load data into shared memory
     
-    __syncthreads();
-    for(int i=0;i<seq_max_len;i++){
-      int word = corpus[idx*seq_max_len+i];
-      if(word!=-1){
-        atomicAdd(&count_arr[idx*vocab_size+word],1);
-      }
+    for (int count = seq_max_len; count > 0; count = count / 2)
+  {
+    if (idx < seq_max_len)
+    {
+      printf("count: %d  thread: %d\n", count, idx);
+      corpus[idx] = corpus[idx] + corpus[idx + count];
     }
-    
-    __syncthreads();
+    seq_max_len /= 2;
+  }
+  if (idx == 0)
+    count_arr[0] = corpus[0];
   }
 }
 
