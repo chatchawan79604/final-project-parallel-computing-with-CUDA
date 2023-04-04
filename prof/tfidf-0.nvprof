@@ -1,0 +1,27 @@
+$ nvprof --print-gpu-trace ./tfidfo.out
+seq_max_len: 7, corpus size: 2
+==2060533== NVPROF is profiling process 2060533, command: ./tfidfo.out
+vocab size: 6
+==2060533== Profiling application: ./tfidfo.out
+==2060533== Profiling result:
+   Start  Duration            Grid Size      Block Size     Regs*    SSMem*    DSMem*      Size  Throughput  SrcMemType  DstMemType           Device   Context    Stream  Name
+283.27ms     960ns                    -               -         -         -         -       56B  55.631MB/s    Pageable      Device  NVIDIA GeForce          1         7  [CUDA memcpy HtoD]
+283.28ms     576ns                    -               -         -         -         -        4B  6.6227MB/s    Pageable      Device  NVIDIA GeForce          1         7  [CUDA memcpy HtoD]
+283.31ms  4.1610us              (1 1 1)       (256 1 1)        16  1.0000KB        0B         -           -           -           -  NVIDIA GeForce          1         7  find_vocab_size_kernel(int*, int*, unsigned long, unsigned long) [130]
+283.33ms  1.1200us                    -               -         -         -         -        4B  3.4060MB/s      Device    Pageable  NVIDIA GeForce          1         7  [CUDA memcpy DtoH]
+283.53ms  1.1200us                    -               -         -         -         -       48B  40.872MB/s    Pageable      Device  NVIDIA GeForce          1         7  [CUDA memcpy HtoD]
+283.55ms  4.8330us              (2 1 1)         (6 1 1)        22  1.0000KB        0B         -           -           -           -  NVIDIA GeForce          1         7  term_frequency_kernel(int*, int, int, double*) [137]
+283.56ms  1.0240us                    -               -         -         -         -       96B  89.407MB/s      Device    Pageable  NVIDIA GeForce          1         7  [CUDA memcpy DtoH]
+283.91ms     896ns                    -               -         -         -         -       48B  51.090MB/s    Pageable      Device  NVIDIA GeForce          1         7  [CUDA memcpy HtoD]
+283.93ms  4.7680us              (6 1 1)         (2 1 1)        20  1.0000KB        0B         -           -           -           -  NVIDIA GeForce          1         7  invert_document_frequency_kernel(int*, int, int, int, double*) [144]
+283.94ms     864ns                    -               -         -         -         -       48B  52.982MB/s      Device    Pageable  NVIDIA GeForce          1         7  [CUDA memcpy DtoH]
+284.25ms     864ns                    -               -         -         -         -       96B  105.96MB/s    Pageable      Device  NVIDIA GeForce          1         7  [CUDA memcpy HtoD]
+284.26ms     640ns                    -               -         -         -         -       48B  71.526MB/s    Pageable      Device  NVIDIA GeForce          1         7  [CUDA memcpy HtoD]
+284.28ms  3.2320us              (1 1 1)       (256 1 1)        11        0B        0B         -           -           -           -  NVIDIA GeForce          1         7  tfidf_kernel(double const *, double const *, double*, int, int) [153]
+284.28ms     737ns                    -               -         -         -         -       96B  124.22MB/s      Device    Pageable  NVIDIA GeForce          1         7  [CUDA memcpy DtoH]
+
+Regs: Number of registers used per CUDA thread. This number includes registers used internally by the CUDA driver and/or tools and can be more than what the compiler shows.
+SSMem: Static shared memory allocated per CUDA block.
+DSMem: Dynamic shared memory allocated per CUDA block.
+SrcMemType: The type of source memory accessed by memory operation/copy
+DstMemType: The type of destination memory accessed by memory operation/copy
