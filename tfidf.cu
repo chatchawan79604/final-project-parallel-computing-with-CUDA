@@ -82,48 +82,48 @@ __global__ void frequency_count_kernel(int *corpus, int *count_arr, int seq_max_
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < corpus_size * seq_max_len)
   {
-    // load data into shared memory
+
+    __shared__ int shcorpus[256];
+
+    shcorpus[threadIdx.x] = corpus[idx];
+    __syncthreads();
     
-    for (int count = seq_max_len; count > 0; count = count / 2)
-  {
-    if (idx < seq_max_len)
-    {
-      printf("count: %d  thread: %d\n", count, idx);
-      corpus[idx] = corpus[idx] + corpus[idx + count];
+    if(shcorpus[threadIdx.x] != -1){
+      // count_arr[shcorpus[threadIdx.x]] += 1;
+      atomicAdd(&count_arr[shcorpus[threadIdx.x] + (vocab_size * (threadIdx.x / seq_max_len))], 1);
     }
-    seq_max_len /= 2;
-  }
-  if (idx == 0)
-    count_arr[0] = corpus[0];
+    
+    __syncthreads(); // Add a synchronization call here
+    
+    // printf("count_arr[%d]=%d", shcorpus[threadIdx.x], count_arr[shcorpus[threadIdx.x]]);
+    
   }
 }
 
 void frequency_count(int *corpus, int corpus_size, int seq_max_len, int vocab_size, int *count_arr)
 {
   int blocksPerGrid = (corpus_size * seq_max_len + 511) / 512;
-  int *d_corpus, *d_count_arr;
-  cudaMalloc((void **)&d_corpus, sizeof(int) * corpus_size * seq_max_len);
-  cudaMemcpy(d_corpus, corpus, sizeof(int) * corpus_size * seq_max_len, cudaMemcpyHostToDevice);
-  cudaMalloc((void **)&d_count_arr, sizeof(int) * corpus_size * vocab_size);
-  cudaMemcpy(d_count_arr, count_arr, sizeof(int) * corpus_size * vocab_size, cudaMemcpyHostToDevice);
-  d_count_arr = (int *)malloc(sizeof(int) * corpus_size * vocab_size);
-  
-  int *h_max;
-  h_max = (int *)malloc(sizeof(int) * blocksPerGrid);
-  cudaMalloc((void **)&d_corpus, sizeof(int) * blocksPerGrid);
-  cudaMemcpy(d_corpus, h_max, sizeof(int) * blocksPerGrid, cudaMemcpyHostToDevice);
-  int *h_count_arr;
-  h_count_arr = (int *)malloc(sizeof(int) * corpus_size * vocab_size);
-  cudaMalloc((void **)&d_count_arr, sizeof(int) * corpus_size * vocab_size);
-  cudaMemcpy(d_count_arr, h_count_arr, sizeof(int) * corpus_size * vocab_size, cudaMemcpyHostToDevice);
+int *d_corpus, *d_count_arr;
 
-  // printf("corpus_size=%d, seq_max_len=%d, vocab_size=%d\n", corpus_size, seq_max_len, vocab_size);
-  frequency_count_kernel<<<blocksPerGrid, 256>>>(d_corpus, d_count_arr, seq_max_len,vocab_size, corpus_size);
-  cudaMemcpy(count_arr, d_count_arr, sizeof(int) * corpus_size * vocab_size, cudaMemcpyDeviceToHost);
-  cudaFree(d_corpus);
-  cudaFree(d_count_arr);
+// Allocate memory on the device and copy data from host to device
+cudaMalloc((void **)&d_corpus, sizeof(int) * corpus_size * seq_max_len);
+cudaMemcpy(d_corpus, corpus, sizeof(int) * corpus_size * seq_max_len, cudaMemcpyHostToDevice);
+cudaMalloc((void **)&d_count_arr, sizeof(int) * corpus_size * vocab_size);
+cudaMemcpy(d_count_arr, count_arr, sizeof(int) * corpus_size * vocab_size, cudaMemcpyHostToDevice);
+
+// Call the kernel with the appropriate grid and block dimensions
+frequency_count_kernel<<<blocksPerGrid, 256>>>(d_corpus, d_count_arr, seq_max_len, vocab_size, corpus_size);
+
+// Copy the results back from the device to the host
+cudaMemcpy(count_arr, d_count_arr, sizeof(int) * corpus_size * vocab_size, cudaMemcpyDeviceToHost);
+
+// Free the memory on the device
+cudaFree(d_corpus);
+cudaFree(d_count_arr);
 
 }
+
+
 
 __global__ void term_frequency_kernel(int *term_counts, int corpus_size, int vocab_size, double *out_arr)
 {
