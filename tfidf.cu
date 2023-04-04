@@ -77,18 +77,25 @@ int find_vocab_size(int *corpus, size_t corpus_size, size_t max_len)
   return max + 1;
 }
 
-void frequency_count(int *corpus, int corpus_size, int max_len, int vocab_size, int *count_arr)
+__global__ void frequency_count_kernel(int *corpus, int *count_arr, int max_len, int corpus_size)
 {
-  for (size_t i = 0; i < corpus_size; i++)
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx < corpus_size * max_len)
   {
-    for (size_t j = 0; j < max_len; j++)
+    if (corpus[idx] != -1)
     {
-      if (corpus[i * max_len + j] != -1)
-      {
-        count_arr[i * vocab_size + corpus[i * max_len + j]]++;
-      }
+      atomicAdd(&count_arr[corpus[idx]], 1);
     }
   }
+}
+
+void frequency_count(int *corpus, int corpus_size, int max_len, int vocab_size, int *count_arr)
+{
+  int blocksPerGrid = (corpus_size * max_len + 511) / 512;
+  int *d_corpus, *d_max;
+  int *h_max;
+  h_max = (int *)malloc(sizeof(int) * blocksPerGrid);
+  frequency_count_kernel<<<blocksPerGrid, 256>>>(corpus, count_arr, max_len, corpus_size);
 }
 
 __global__ void term_frequency_kernel(int *term_counts, int corpus_size, int vocab_size, double *out_arr)
