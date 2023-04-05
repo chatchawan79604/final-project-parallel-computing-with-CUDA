@@ -6,3 +6,24 @@
   +#+     +#+                         +#+     +#+    +#+ +#+            
  #+#     #+#                         #+#     #+#    #+# #+#             
 ###     ###                     ########### #########  ###              
+
+
+To run the program:
+
+option 1: use makefile
+
+```
+make
+```
+
+check profiling results:
+
+```
+make prof
+```
+
+option 2: use nvcc
+
+```
+nvcc -o tfidf tfidf.cu
+```
