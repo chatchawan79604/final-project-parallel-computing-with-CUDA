@@ -87,43 +87,40 @@ __global__ void frequency_count_kernel(int *corpus, int *count_arr, int seq_max_
 
     shcorpus[threadIdx.x] = corpus[idx];
     __syncthreads();
-    
-    if(shcorpus[threadIdx.x] != -1){
+
+    if (shcorpus[threadIdx.x] != -1)
+    {
       // count_arr[shcorpus[threadIdx.x]] += 1;
       atomicAdd(&count_arr[shcorpus[threadIdx.x] + (vocab_size * (threadIdx.x / seq_max_len))], 1);
     }
-    
+
     __syncthreads(); // Add a synchronization call here
-    
+
     // printf("count_arr[%d]=%d", shcorpus[threadIdx.x], count_arr[shcorpus[threadIdx.x]]);
-    
   }
 }
 
 void frequency_count(int *corpus, int corpus_size, int seq_max_len, int vocab_size, int *count_arr)
 {
   int blocksPerGrid = (corpus_size * seq_max_len + 511) / 512;
-int *d_corpus, *d_count_arr;
+  int *d_corpus, *d_count_arr;
 
-// Allocate memory on the device and copy data from host to device
-cudaMalloc((void **)&d_corpus, sizeof(int) * corpus_size * seq_max_len);
-cudaMemcpy(d_corpus, corpus, sizeof(int) * corpus_size * seq_max_len, cudaMemcpyHostToDevice);
-cudaMalloc((void **)&d_count_arr, sizeof(int) * corpus_size * vocab_size);
-cudaMemcpy(d_count_arr, count_arr, sizeof(int) * corpus_size * vocab_size, cudaMemcpyHostToDevice);
+  // Allocate memory on the device and copy data from host to device
+  cudaMalloc((void **)&d_corpus, sizeof(int) * corpus_size * seq_max_len);
+  cudaMemcpy(d_corpus, corpus, sizeof(int) * corpus_size * seq_max_len, cudaMemcpyHostToDevice);
+  cudaMalloc((void **)&d_count_arr, sizeof(int) * corpus_size * vocab_size);
+  cudaMemcpy(d_count_arr, count_arr, sizeof(int) * corpus_size * vocab_size, cudaMemcpyHostToDevice);
 
-// Call the kernel with the appropriate grid and block dimensions
-frequency_count_kernel<<<blocksPerGrid, 256>>>(d_corpus, d_count_arr, seq_max_len, vocab_size, corpus_size);
+  // Call the kernel with the appropriate grid and block dimensions
+  frequency_count_kernel<<<blocksPerGrid, 256>>>(d_corpus, d_count_arr, seq_max_len, vocab_size, corpus_size);
 
-// Copy the results back from the device to the host
-cudaMemcpy(count_arr, d_count_arr, sizeof(int) * corpus_size * vocab_size, cudaMemcpyDeviceToHost);
+  // Copy the results back from the device to the host
+  cudaMemcpy(count_arr, d_count_arr, sizeof(int) * corpus_size * vocab_size, cudaMemcpyDeviceToHost);
 
-// Free the memory on the device
-cudaFree(d_corpus);
-cudaFree(d_count_arr);
-
+  // Free the memory on the device
+  cudaFree(d_corpus);
+  cudaFree(d_count_arr);
 }
-
-
 
 __global__ void term_frequency_kernel(int *term_counts, int corpus_size, int vocab_size, double *out_arr)
 {
@@ -179,13 +176,6 @@ __global__ void invert_document_frequency_kernel(int *term_counts, int corpus_si
 
   int w_dc = scounts[0] + smooth_idf;
   out_arr[wrd] = log10((double)corpus_size / w_dc);
-
-  // if (doc == 0)
-  // {
-  //   printf("corpus_size = %d\n", corpus_size);
-  //   printf("idf(wrd=%d) = %f\n", wrd, out_arr[wrd]);
-  //   printf("w_doc_count(wrd=%d) = %d\n", wrd, w_dc);
-  // }
 }
 
 __global__ void tfidf_kernel(const double *tf_arr, const double *idf_arr, double *out_arr, int corpus_size, int vocab_size)
@@ -199,15 +189,17 @@ __global__ void tfidf_kernel(const double *tf_arr, const double *idf_arr, double
   }
 }
 
-void tfidf(int *term_counts, double *out_arr, int corpus_size, int vocab_size)
+void tfidf(int *corpus, double *out_arr, int corpus_size, int vocab_size, int seq_max_len)
 {
   int smooth_idf = 0;
   size_t num_elements = corpus_size * vocab_size;
   double *d_tf_arr, *d_idf_arr, *d_out_arr;
   int *d_term_counts;
+  int *d_corpus;
 
+  int tc_grid_size = (corpus_size * seq_max_len + 511) / 512;
   cudaMalloc((void **)&d_term_counts, corpus_size * vocab_size * sizeof(int));
-  cudaMemcpy(d_term_counts, term_counts, corpus_size * vocab_size * sizeof(int), cudaMemcpyHostToDevice);
+  frequency_count_kernel<<<tc_grid_size, 256>>>(d_corpus, d_term_counts, seq_max_len, vocab_size, corpus_size);
 
   /* term frequency */
   cudaMalloc((void **)&d_tf_arr, num_elements * sizeof(double));
@@ -344,27 +336,26 @@ int main()
   printf("vocab size: %d\n", vocab_size);
 
   // initailize word counts array
-  int *counts = (int *)malloc(sizeof(int) * corpus_size * vocab_size);
-  for (int i = 0; i < corpus_size; i++)
-  {
-    for (size_t j = 0; j < vocab_size; j++)
-    {
-      // set to identity
-      counts[i * vocab_size + j] = 0;
-    }
-  }
+  // int *counts = (int *)malloc(sizeof(int) * corpus_size * vocab_size);
+  // for (int i = 0; i < corpus_size; i++)
+  // {
+  //   for (size_t j = 0; j < vocab_size; j++)
+  //   {
+  //     // set to identity
+  //     counts[i * vocab_size + j] = 0;
+  //   }
+  // }
 
   // initailize tf array
   double *tf_arr = (double *)malloc(sizeof(double *) * corpus_size * vocab_size);
-  
-  frequency_count(corpus, corpus_size, seq_max_len, vocab_size, counts);
-  tfidf(counts, tf_arr, corpus_size, vocab_size);
 
-  char tfidf_filename[] = "_tfidf.arr";
-  write_array_to_file(tf_arr, corpus_size, vocab_size, tfidf_filename);
+  // frequency_count(corpus, corpus_size, seq_max_len, vocab_size, counts);
+  tfidf(corpus, tf_arr, corpus_size, vocab_size, seq_max_len);
+
+  // char tfidf_filename[] = "_tfidf.arr";
+  // write_array_to_file(tf_arr, corpus_size, vocab_size, tfidf_filename);
 
   free(tf_arr);
-  free(counts);
   free(corpus);
   return 0;
 }
